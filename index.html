@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>PrestaTodoCR — Gestión de Préstamos</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
+      colors: {
+        brand: { DEFAULT:'#10B981', light:'#D1FAE5', dark:'#059669', xdark:'#047857' },
+        slate: { 50:'#F8FAFC', 100:'#F1F5F9', 200:'#E2E8F0', 300:'#CBD5E1', 400:'#94A3B8', 500:'#64748B', 600:'#475569', 700:'#334155', 800:'#1E293B', 900:'#0F172A' }
+      }
+    }
+  }
+}
+</script>
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  body{font-family:'Inter',system-ui,sans-serif;background:#F8FAFC;color:#0F172A}
+  ::-webkit-scrollbar{width:5px;height:5px}
+  ::-webkit-scrollbar-track{background:#F1F5F9}
+  ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:9px}
+  .mono{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+
+  /* sidebar */
+  .sidebar{width:220px;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+  @media(max-width:768px){.sidebar{display:none}.mobile-header{display:flex!important}}
+  .mobile-header{display:none}
+
+  /* progress ring */
+  .ring-track{stroke:#E2E8F0}
+  .ring-fill{stroke:#10B981;stroke-linecap:round;transition:stroke-dashoffset .6s ease}
+
+  /* ticket perf */
+  .ticket-perf{background:radial-gradient(circle at 0 50%,#F8FAFC 8px,transparent 9px),
+    radial-gradient(circle at 100% 50%,#F8FAFC 8px,transparent 9px);
+    background-size:18px 18px;background-position:0 0,100% 0;background-repeat:repeat-y;
+    border-top:2px dashed #E2E8F0;border-bottom:2px dashed #E2E8F0;margin:0 -4px}
+
+  /* toast */
+  .toast{animation:slideUp .25s ease forwards}
+  @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+  /* modal */
+  .modal-enter{animation:fadeIn .2s ease forwards}
+  @keyframes fadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+
+  /* next-cycle bar */
+  .cycle-bar{height:4px;border-radius:2px;background:#E2E8F0;overflow:hidden}
+  .cycle-fill{height:100%;background:linear-gradient(90deg,#10B981,#059669);transition:width .4s ease}
+
+  /* abono input */
+  input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+  .btn-action{display:flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;padding:8px 0;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;border:none}
+  .btn-action:active{transform:scale(.97)}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ── MOBILE HEADER ─────────────────────────────────────── -->
+<header class="mobile-header sticky top-0 z-40 bg-white border-b border-slate-200 px-4 py-3 items-center justify-between shadow-sm">
+  <div class="flex items-center gap-2">
+    <div class="w-8 h-8 bg-brand rounded-lg flex items-center justify-center">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+    </div>
+    <span class="font-bold text-slate-900 text-sm">PrestaTodoCR</span>
+  </div>
+  <button onclick="document.getElementById('mobileNav').classList.toggle('hidden')" class="p-2 rounded-lg hover:bg-slate-100">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="#64748B"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+  </button>
+</header>
+<div id="mobileNav" class="hidden bg-white border-b border-slate-200 px-4 py-2 flex flex-col gap-1">
+  <button onclick="showTab('dashboard');document.getElementById('mobileNav').classList.add('hidden')" class="text-left px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">Panel Principal</button>
+  <button onclick="showTab('new');document.getElementById('mobileNav').classList.add('hidden')" class="text-left px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">Nuevo Préstamo</button>
+  <button onclick="showTab('calc');document.getElementById('mobileNav').classList.add('hidden')" class="text-left px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-50">Calculadora</button>
+</div>
+
+<div class="flex min-h-screen">
+
+<!-- ── SIDEBAR ───────────────────────────────────────────── -->
+<aside class="sidebar bg-white border-r border-slate-200 flex flex-col p-5 gap-2">
+  <div class="mb-4">
+    <div class="flex items-center gap-2.5 mb-1">
+      <div class="w-9 h-9 bg-brand rounded-xl flex items-center justify-center flex-shrink-0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+      </div>
+      <div>
+        <div class="font-bold text-slate-900 text-sm leading-tight">PrestaTodoCR</div>
+        <div class="text-xs text-slate-400">Panel Financiero</div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="flex flex-col gap-1 flex-1">
+    <button onclick="showTab('dashboard')" id="nav-dashboard" class="nav-btn flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left w-full bg-brand text-white">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+      Panel Principal
+    </button>
+    <button onclick="showTab('new')" id="nav-new" class="nav-btn flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left w-full text-slate-600 hover:bg-slate-50">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+      Nuevo Préstamo
+    </button>
+    <button onclick="showTab('calc')" id="nav-calc" class="nav-btn flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left w-full text-slate-600 hover:bg-slate-50">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z"/></svg>
+      Calculadora
+    </button>
+  </nav>
+
+  <div class="mt-auto pt-4 border-t border-slate-100">
+    <div class="text-xs text-slate-400 mb-1">Reloj</div>
+    <div id="sidebarClock" class="font-medium text-slate-700 text-sm mono"></div>
+  </div>
+</aside>
+
+<!-- ── MAIN ──────────────────────────────────────────────── -->
+<main class="flex-1 overflow-y-auto">
+
+  <!-- ══ TAB: DASHBOARD ════════════════════════════════════ -->
+  <div id="tab-dashboard" class="p-6 max-w-7xl mx-auto">
+
+    <!-- capital editor -->
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <div>
+        <h2 class="text-xl font-bold text-slate-900">Panel Principal</h2>
+        <p class="text-slate-400 text-sm">Resumen de operaciones activas</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <div id="capDisplay" class="mono font-bold text-slate-900 text-lg bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-sm cursor-pointer hover:border-brand transition-colors" onclick="openCapModal()">
+          Capital: ₡0
+        </div>
+        <button onclick="openCapModal()" class="w-9 h-9 bg-white border border-slate-200 rounded-xl flex items-center justify-center hover:border-brand transition-colors shadow-sm text-slate-500 hover:text-brand">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- KPI cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <div class="text-xs font-medium text-slate-400 mb-1">Capital Total</div>
+        <div id="kpiTotal" class="text-xl font-bold text-slate-900 mono">₡0</div>
+        <div class="mt-2 text-xs text-slate-400">Capital configurado</div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <div class="text-xs font-medium text-slate-400 mb-1">Capital Prestado</div>
+        <div id="kpiPrestado" class="text-xl font-bold text-red-500 mono">₡0</div>
+        <div class="mt-2 text-xs text-slate-400">En circulación</div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <div class="text-xs font-medium text-slate-400 mb-1">Capital Disponible</div>
+        <div id="kpiDisponible" class="text-xl font-bold text-brand mono">₡0</div>
+        <div class="mt-2 text-xs text-slate-400">Listo para prestar</div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <div class="text-xs font-medium text-slate-400 mb-1">Ganancias Intereses</div>
+        <div id="kpiIntereses" class="text-xl font-bold text-amber-500 mono">₡0</div>
+        <div class="mt-2 text-xs text-slate-400">Intereses acumulados</div>
+      </div>
+    </div>
+
+    <!-- barra de uso del capital -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-sm font-semibold text-slate-700">Uso del capital</div>
+        <div id="pctLabel" class="text-xs font-medium text-slate-400 mono">0% en uso</div>
+      </div>
+      <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+        <div id="progressBar" class="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-brand to-brand-dark" style="width:0%"></div>
+      </div>
+      <div class="flex justify-between mt-2 text-xs text-slate-400">
+        <span id="pctPrestado">Prestado: ₡0</span>
+        <span id="pctDisponible">Disponible: ₡0</span>
+      </div>
+    </div>
+
+    <!-- tarjetas préstamos -->
+    <div class="flex items-center justify-between mb-4">
+      <div class="text-sm font-semibold text-slate-700">Préstamos activos</div>
+      <div class="bg-slate-100 text-slate-600 text-xs font-semibold px-3 py-1 rounded-full"><span id="cardCount">0</span> préstamos</div>
+    </div>
+    <div id="cardsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"></div>
+  </div>
+
+  <!-- ══ TAB: NUEVO PRÉSTAMO ════════════════════════════════ -->
+  <div id="tab-new" class="hidden p-6 max-w-2xl mx-auto">
+    <div class="mb-6">
+      <h2 class="text-xl font-bold text-slate-900">Registrar Préstamo</h2>
+      <p class="text-slate-400 text-sm">Completa todos los campos para registrar un nuevo préstamo.</p>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-5">
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 mb-1.5">Nombre completo</label>
+        <input id="fNombre" type="text" placeholder="Juan Pérez" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-slate-300"/>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1.5">Correo electrónico</label>
+          <input id="fEmail" type="email" placeholder="correo@ejemplo.com" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-slate-300"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1.5">Teléfono</label>
+          <div class="flex gap-2">
+            <div class="border border-slate-200 rounded-xl px-3 py-3 text-sm text-slate-500 bg-slate-50 whitespace-nowrap flex items-center">🇨🇷 +506</div>
+            <input id="fTel" type="tel" placeholder="8888-8888" class="flex-1 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-slate-300"/>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1.5">Monto a prestar (₡)</label>
+          <input id="fMonto" type="number" placeholder="50000" min="1" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-slate-300"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1.5">Fecha y hora</label>
+          <input id="fFecha" type="datetime-local" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all"/>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 mb-1.5">SINPE Móvil (para recibos)</label>
+        <input id="fSinpe" type="tel" placeholder="8888-8888 (tu número para cobros)" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-slate-300"/>
+      </div>
+      <button onclick="registrarPrestamo()" class="w-full bg-brand hover:bg-brand-dark text-white font-semibold py-3 rounded-xl text-sm transition-colors shadow-sm">
+        Registrar préstamo
+      </button>
+    </div>
+  </div>
+
+  <!-- ══ TAB: CALCULADORA ═══════════════════════════════════ -->
+  <div id="tab-calc" class="hidden p-6 max-w-2xl mx-auto">
+    <div class="mb-6">
+      <h2 class="text-xl font-bold text-slate-900">Calculadora de Proyección</h2>
+      <p class="text-slate-400 text-sm">Muestra al cliente cuánto pagará según cuándo devuelva el préstamo.</p>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-5">
+      <label class="block text-xs font-semibold text-slate-500 mb-1.5">Monto del préstamo (₡)</label>
+      <div class="flex gap-3">
+        <input id="calcMonto" type="number" placeholder="100000" min="1" class="flex-1 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all placeholder:text-slate-300" oninput="calcProyeccion()"/>
+        <button onclick="calcProyeccion()" class="bg-brand text-white px-5 rounded-xl text-sm font-semibold hover:bg-brand-dark transition-colors">Calcular</button>
+      </div>
+    </div>
+    <div id="calcResult" class="hidden">
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-100 bg-slate-50 text-xs font-semibold text-slate-500 grid grid-cols-3">
+          <span>Días</span><span class="text-center">Intereses</span><span class="text-right">Total a pagar</span>
+        </div>
+        <div id="calcRows" class="divide-y divide-slate-100"></div>
+      </div>
+      <div class="mt-4 bg-brand-light border border-brand/20 rounded-2xl p-4 text-sm text-brand-xdark font-medium">
+        Regla: ₡5,000 de interés por cada 4 días transcurridos. El interés se aplica en bloques de 4 días completos.
+      </div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<!-- ══ MODAL CAPITAL ════════════════════════════════════════ -->
+<div id="capModal" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onclick="closeCapModal(event)">
+  <div class="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-full max-w-sm modal-enter">
+    <h3 class="font-bold text-slate-900 mb-1">Configurar Capital</h3>
+    <p class="text-sm text-slate-400 mb-4">Establece el capital total disponible para préstamos.</p>
+    <input id="capInput" type="number" placeholder="Ej. 500000" min="0" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 mb-4 mono"/>
+    <div class="flex gap-2">
+      <button onclick="closeCapModal()" class="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-slate-50">Cancelar</button>
+      <button onclick="saveCapital()" class="flex-1 bg-brand text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-brand-dark">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL ABONO ══════════════════════════════════════════ -->
+<div id="abonoModal" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onclick="closeAbonoModal(event)">
+  <div class="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-full max-w-sm modal-enter">
+    <h3 class="font-bold text-slate-900 mb-1">Registrar Abono</h3>
+    <p id="abonoSubtitle" class="text-sm text-slate-400 mb-4"></p>
+    <div class="bg-slate-50 rounded-xl p-4 mb-4 grid grid-cols-2 gap-3 text-sm">
+      <div><div class="text-xs text-slate-400 mb-0.5">Total con intereses</div><div id="abonoTotal" class="font-bold text-slate-900 mono"></div></div>
+      <div><div class="text-xs text-slate-400 mb-0.5">Abonos anteriores</div><div id="abonoAnterior" class="font-bold text-brand mono"></div></div>
+    </div>
+    <label class="block text-xs font-semibold text-slate-500 mb-1.5">Monto del abono (₡)</label>
+    <input id="abonoInput" type="number" min="1" placeholder="Ej. 20000" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 mb-4 mono"/>
+    <div class="flex gap-2">
+      <button onclick="closeAbonoModal()" class="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-slate-50">Cancelar</button>
+      <button onclick="guardarAbono()" class="flex-1 bg-brand text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-brand-dark">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL NOTIFICACIÓN WA/EMAIL ══════════════════════════ -->
+<div id="notifModal" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onclick="closeNotifModal(event)">
+  <div class="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-full max-w-md modal-enter">
+    <h3 class="font-bold text-slate-900 mb-1">Enviar notificación de cobro</h3>
+    <p class="text-sm text-slate-400 mb-4">Elige el canal para contactar a tu prestatario.</p>
+    <div class="bg-slate-50 rounded-xl p-4 text-sm text-slate-700 leading-relaxed mb-5 whitespace-pre-line border border-slate-200" id="notifMsg"></div>
+    <div id="notifBtns" class="flex flex-col gap-2"></div>
+    <button onclick="closeNotifModal()" class="w-full mt-2 border border-slate-200 text-slate-500 rounded-xl py-2.5 text-sm font-semibold hover:bg-slate-50">Cancelar</button>
+  </div>
+</div>
+
+<!-- ══ MODAL FACTURA ═════════════════════════════════════════ -->
+<div id="facturaModal" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onclick="closeFacturaModal(event)">
+  <div class="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md my-4 modal-enter">
+    <!-- ticket visual (capturado por html2canvas) -->
+    <div id="ticketCapture" class="bg-white p-6 rounded-t-2xl">
+      <!-- header -->
+      <div class="text-center mb-5">
+        <div class="inline-flex items-center gap-2 mb-3">
+          <div class="w-9 h-9 bg-brand rounded-xl flex items-center justify-center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+          </div>
+          <span class="font-bold text-slate-900 text-lg">PrestaTodoCR</span>
+        </div>
+        <div class="text-xs text-slate-400" id="fEmision"></div>
+        <div class="text-xs font-bold text-slate-600 mono" id="fNumComp"></div>
+      </div>
+
+      <!-- perf -->
+      <div class="ticket-perf py-4 my-3 mx-1">
+        <div class="grid grid-cols-2 gap-3 px-2">
+          <div><div class="text-xs text-slate-400 mb-0.5">Cliente</div><div id="fCliente" class="text-sm font-bold text-slate-900"></div></div>
+          <div><div class="text-xs text-slate-400 mb-0.5">Teléfono</div><div id="fTelF" class="text-sm font-semibold text-slate-700 mono"></div></div>
+          <div class="col-span-2"><div class="text-xs text-slate-400 mb-0.5">Correo</div><div id="fEmailF" class="text-sm font-semibold text-slate-700"></div></div>
+        </div>
+      </div>
+
+      <!-- tabla desglose -->
+      <div class="mt-4">
+        <div class="text-xs font-semibold text-slate-500 mb-2">Desglose</div>
+        <div class="flex flex-col gap-2 text-sm">
+          <div class="flex justify-between"><span class="text-slate-500">Monto base solicitado</span><span id="fBase" class="font-semibold mono text-slate-800"></span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Días transcurridos</span><span id="fDias" class="font-semibold mono text-slate-800"></span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Intereses acumulados</span><span id="fInter" class="font-semibold mono text-amber-500"></span></div>
+          <div id="fAbonoRow" class="flex justify-between hidden"><span class="text-slate-500">Abonos realizados (-)</span><span id="fAbonos" class="font-semibold mono text-brand"></span></div>
+        </div>
+        <div class="border-t border-dashed border-slate-200 mt-3 pt-3 flex justify-between items-center">
+          <span class="font-bold text-slate-900">Total restante a pagar</span>
+          <span id="fTotal" class="text-xl font-extrabold mono text-brand"></span>
+        </div>
+      </div>
+
+      <!-- perf separador inferior -->
+      <div class="ticket-perf py-3 my-4 mx-1">
+        <div class="px-2 text-center">
+          <div class="text-xs text-slate-400 mb-1">Transferir vía SINPE Móvil a</div>
+          <div id="fSinpeShow" class="font-bold text-slate-900 mono text-sm"></div>
+        </div>
+      </div>
+
+      <!-- estado badge -->
+      <div class="flex justify-center">
+        <div id="fEstado" class="px-5 py-2 rounded-full text-xs font-bold tracking-wide"></div>
+      </div>
+
+      <!-- términos -->
+      <p class="text-center text-xs text-slate-400 mt-4 leading-relaxed">Pago puntual evita cargos adicionales. Intereses de ₡5,000 por cada 4 días.<br/>Este comprobante es informativo y no constituye contrato legal.</p>
+    </div>
+
+    <!-- botones fuera del área de captura -->
+    <div class="border-t border-slate-200 p-4 flex flex-col gap-2">
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="descargarPNG()" class="btn-action bg-slate-900 text-white text-sm font-semibold py-3 rounded-xl hover:bg-slate-800 transition-colors">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>
+          Descargar PNG
+        </button>
+        <button onclick="compartirWA()" class="btn-action bg-[#25D366] text-white text-sm font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          Compartir WA
+        </button>
+      </div>
+      <button onclick="closeFacturaModal()" class="border border-slate-200 text-slate-500 rounded-xl py-2.5 text-sm font-semibold hover:bg-slate-50">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL CONFIRMAR PAGADO ════════════════════════════════ -->
+<div id="pagadoModal" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-full max-w-sm modal-enter">
+    <div class="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center mb-4">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="#EF4444"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14l-4-4 1.41-1.41L10 13.17l6.59-6.59L18 8l-8 8z"/></svg>
+    </div>
+    <h3 class="font-bold text-slate-900 mb-1">Marcar como pagado</h3>
+    <p id="pagadoMsg" class="text-sm text-slate-400 mb-5"></p>
+    <div class="flex gap-2">
+      <button id="pagadoCancelar" class="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-slate-50">Cancelar</button>
+      <button id="pagadoConfirmar" class="flex-1 bg-red-500 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-red-600">Eliminar préstamo</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TOAST ════════════════════════════════════════════════ -->
+<div id="toastContainer" class="fixed bottom-5 right-5 z-[999] flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- ══ JAVASCRIPT ════════════════════════════════════════════ -->
+<script>
+/* ── STATE ─────────────────────────────────────────────── */
+let state = { capital: 0, sinpe: '', prestamos: [] };
+
+function loadState() {
+  const s = localStorage.getItem('prestatodocr_v3');
+  if (s) state = JSON.parse(s);
+}
+function saveState() {
+  localStorage.setItem('prestatodocr_v3', JSON.stringify(state));
+}
+
+/* ── UTILS ──────────────────────────────────────────────── */
+function fmt(n) { return '₡' + Math.round(n).toLocaleString('es-CR'); }
+function uid() { return 'p' + Date.now().toString(36) + Math.random().toString(36).replace(/[^a-z0-9]/g,'').slice(0,5); }
+function compNum() { return 'REC-' + Date.now().toString().slice(-7); }
+function iniciales(n) { return n.trim().split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase(); }
+
+function diasTranscurridos(fechaISO) {
+  return Math.floor((new Date() - new Date(fechaISO)) / 86400000);
+}
+function calcIntereses(dias) { return Math.floor(dias / 4) * 5000; }
+function fmtFecha(iso) {
+  return new Date(iso).toLocaleString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+function setDefaultDate() {
+  const now = new Date();
+  document.getElementById('fFecha').value = new Date(now - now.getTimezoneOffset()*60000).toISOString().slice(0,16);
+}
+
+/* ── CLOCK ─────────────────────────────────────────────── */
+function updateClock() {
+  const now = new Date();
+  document.getElementById('sidebarClock').textContent =
+    now.toLocaleString('es-CR',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+/* ── TABS ───────────────────────────────────────────────── */
+function showTab(tab) {
+  ['dashboard','new','calc'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('hidden', t!==tab);
+    const btn = document.getElementById('nav-'+t);
+    if (btn) {
+      btn.classList.toggle('bg-brand',t===tab);
+      btn.classList.toggle('text-white',t===tab);
+      btn.classList.toggle('text-slate-600',t!==tab);
+      btn.classList.toggle('hover:bg-slate-50',t!==tab);
+    }
+  });
+  if (tab==='calc') calcProyeccion();
+}
+
+/* ── CAPITAL ────────────────────────────────────────────── */
+function openCapModal() {
+  document.getElementById('capInput').value = state.capital||'';
+  document.getElementById('capModal').classList.remove('hidden');
+  setTimeout(()=>document.getElementById('capInput').focus(),50);
+}
+function closeCapModal(e) {
+  if (!e||e.target===document.getElementById('capModal')) document.getElementById('capModal').classList.add('hidden');
+}
+function saveCapital() {
+  const v = parseFloat(document.getElementById('capInput').value);
+  if (isNaN(v)||v<0) { toast('⚠️ Ingresa un monto válido.','warn'); return; }
+  state.capital = v;
+  saveState();
+  document.getElementById('capModal').classList.add('hidden');
+  updateDashboard();
+  toast('✅ Capital actualizado.');
+}
+
+/* ── DASHBOARD ──────────────────────────────────────────── */
+function updateDashboard() {
+  const total = state.capital;
+  const prestado = state.prestamos.reduce((s,p)=>s+p.monto,0);
+  const disponible = Math.max(0,total-prestado);
+  const intereses = state.prestamos.reduce((s,p)=>{
+    const d=diasTranscurridos(p.fecha);
+    return s+calcIntereses(d);
+  },0);
+  const pct = total>0?Math.min(100,(prestado/total)*100):0;
+
+  document.getElementById('capDisplay').textContent = 'Capital: '+fmt(total);
+  document.getElementById('kpiTotal').textContent = fmt(total);
+  document.getElementById('kpiPrestado').textContent = fmt(prestado);
+  document.getElementById('kpiDisponible').textContent = fmt(disponible);
+  document.getElementById('kpiIntereses').textContent = fmt(intereses);
+  document.getElementById('progressBar').style.width = pct+'%';
+  document.getElementById('pctLabel').textContent = pct.toFixed(1)+'% en uso';
+  document.getElementById('pctPrestado').textContent = 'Prestado: '+fmt(prestado);
+  document.getElementById('pctDisponible').textContent = 'Disponible: '+fmt(disponible);
+  document.getElementById('cardCount').textContent = state.prestamos.length;
+}
+
+/* ── RENDER CARDS ───────────────────────────────────────── */
+function renderCards() {
+  const grid = document.getElementById('cardsGrid');
+  if (!state.prestamos.length) {
+    grid.innerHTML = `<div class="col-span-full bg-white rounded-2xl border border-slate-200 shadow-sm p-12 text-center">
+      <div class="text-4xl mb-3">📋</div>
+      <div class="font-semibold text-slate-700 mb-1">Sin préstamos activos</div>
+      <div class="text-sm text-slate-400">Registra tu primer préstamo para comenzar.</div>
+      <button onclick="showTab('new')" class="mt-4 bg-brand text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-brand-dark transition-colors">Registrar préstamo</button>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = state.prestamos.map(p => buildCard(p)).join('');
+}
+
+function buildCard(p) {
+  const dias       = diasTranscurridos(p.fecha);
+  const intereses  = calcIntereses(dias);
+  const abonos     = p.abonos || 0;
+  const totalBruto = p.monto + intereses;
+  const restante   = Math.max(0, totalBruto - abonos);
+  const moroso     = dias >= 4;
+  const aldia      = dias < 4;
+
+  // ciclo de 4 días: progreso hacia el siguiente interés
+  const diaEnCiclo = dias % 4;
+  const pctCiclo   = (diaEnCiclo / 4) * 100;
+
+  const statusColor = aldia ? 'text-brand bg-brand-light' : 'text-red-500 bg-red-50';
+  const statusLabel = aldia ? 'Al día' : 'En mora';
+  const statusDot   = aldia ? 'bg-brand' : 'bg-red-500';
+  const borderTop   = aldia ? 'border-t-brand' : 'border-t-red-400';
+
+  return `
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col border-t-4 ${borderTop}">
+    <!-- card header -->
+    <div class="p-4 flex items-start gap-3">
+      <div class="w-11 h-11 rounded-xl bg-brand-light flex items-center justify-center text-brand font-bold text-base flex-shrink-0">
+        ${iniciales(p.nombre)}
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="font-bold text-slate-900 text-sm truncate">${p.nombre}</div>
+        <div class="text-xs text-slate-400 truncate">📧 ${p.email}</div>
+        <div class="text-xs text-slate-400">📱 +506 ${p.tel}</div>
+      </div>
+      <span class="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${statusColor}">
+        <span class="w-1.5 h-1.5 rounded-full ${statusDot}"></span>${statusLabel}
+      </span>
+    </div>
+
+    <!-- amounts -->
+    <div class="px-4 pb-3 grid grid-cols-3 gap-2">
+      <div class="bg-slate-50 rounded-xl p-2.5">
+        <div class="text-xs text-slate-400 mb-0.5">Capital</div>
+        <div class="text-sm font-bold text-slate-900 mono">${fmt(p.monto)}</div>
+      </div>
+      <div class="bg-amber-50 rounded-xl p-2.5">
+        <div class="text-xs text-amber-600 mb-0.5">Intereses</div>
+        <div class="text-sm font-bold text-amber-600 mono">${fmt(intereses)}</div>
+      </div>
+      <div class="${abonos>0?'bg-brand-light':'bg-slate-50'} rounded-xl p-2.5">
+        <div class="text-xs ${abonos>0?'text-brand':'text-slate-400'} mb-0.5">Abonos</div>
+        <div class="text-sm font-bold ${abonos>0?'text-brand':'text-slate-400'} mono">${fmt(abonos)}</div>
+      </div>
+    </div>
+
+    <!-- total destacado -->
+    <div class="mx-4 mb-3 bg-slate-900 rounded-xl px-4 py-3 flex justify-between items-center">
+      <span class="text-slate-300 text-xs font-medium">Saldo total</span>
+      <span class="text-white text-lg font-extrabold mono">${fmt(restante)}</span>
+    </div>
+
+    <!-- ciclo barra -->
+    <div class="px-4 pb-3">
+      <div class="flex justify-between text-xs text-slate-400 mb-1.5">
+        <span>${diaEnCiclo} día${diaEnCiclo!==1?'s':''} en ciclo actual</span>
+        <span>Próximo +₡5,000 en ${4-diaEnCiclo} día${(4-diaEnCiclo)!==1?'s':''}</span>
+      </div>
+      <div class="cycle-bar"><div class="cycle-fill" style="width:${pctCiclo}%"></div></div>
+      <div class="text-xs text-slate-400 mt-1">${dias} días desde ${fmtFecha(p.fecha)}</div>
+    </div>
+
+    <!-- actions toolbar -->
+    <div class="border-t border-slate-100 grid grid-cols-4 divide-x divide-slate-100">
+      <button data-action="notif" data-id="${p.id}" title="WhatsApp" class="card-action-btn flex flex-col items-center gap-1 py-3 hover:bg-green-50 transition-colors group">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        <span class="text-xs text-slate-500 group-hover:text-green-600">Avisar</span>
+      </button>
+      <button data-action="abono" data-id="${p.id}" title="Abono" class="card-action-btn flex flex-col items-center gap-1 py-3 hover:bg-blue-50 transition-colors group">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#3B82F6"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z"/><path d="M12 7v10M7 12h10" stroke="#3B82F6" stroke-width="2" fill="none"/></svg>
+        <span class="text-xs text-slate-500 group-hover:text-blue-600">Abono</span>
+      </button>
+      <button data-action="factura" data-id="${p.id}" title="Factura" class="card-action-btn flex flex-col items-center gap-1 py-3 hover:bg-amber-50 transition-colors group">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#F59E0B"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+        <span class="text-xs text-slate-500 group-hover:text-amber-600">Factura</span>
+      </button>
+      <button data-action="pagado" data-id="${p.id}" title="Pagado" class="card-action-btn flex flex-col items-center gap-1 py-3 hover:bg-red-50 transition-colors group">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#EF4444"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14l-4-4 1.41-1.41L10 13.17l6.59-6.59L18 8l-8 8z"/></svg>
+        <span class="text-xs text-slate-500 group-hover:text-red-500">Pagado</span>
+      </button>
+    </div>
+  </div>`;
+}
+
+/* ── REGISTRAR PRÉSTAMO ─────────────────────────────────── */
+function registrarPrestamo() {
+  const nombre = document.getElementById('fNombre').value.trim();
+  const email  = document.getElementById('fEmail').value.trim();
+  const tel    = document.getElementById('fTel').value.trim();
+  const monto  = parseFloat(document.getElementById('fMonto').value);
+  const fecha  = document.getElementById('fFecha').value;
+  const sinpe  = document.getElementById('fSinpe').value.trim();
+
+  if (!nombre) { toast('⚠️ Ingresa el nombre.','warn'); return; }
+  if (!email)  { toast('⚠️ Ingresa el correo.','warn'); return; }
+  if (!tel)    { toast('⚠️ Ingresa el teléfono.','warn'); return; }
+  if (isNaN(monto)||monto<=0) { toast('⚠️ Ingresa un monto válido.','warn'); return; }
+  if (!fecha)  { toast('⚠️ Selecciona fecha y hora.','warn'); return; }
+
+  const disp = state.capital - state.prestamos.reduce((s,p)=>s+p.monto,0);
+  if (state.capital > 0 && monto > disp) { toast('⚠️ Supera el capital disponible ('+fmt(disp)+').','warn'); return; }
+
+  if (sinpe) state.sinpe = sinpe;
+  state.prestamos.unshift({ id:uid(), nombre, email, tel, monto, fecha, abonos:0 });
+  saveState();
+  renderCards();
+  updateDashboard();
+
+  // reset
+  ['fNombre','fEmail','fTel','fMonto','fSinpe'].forEach(id => document.getElementById(id).value='');
+  setDefaultDate();
+
+  showTab('dashboard');
+  toast('✅ Préstamo registrado para '+nombre+'.');
+}
+
+/* ── ABONOS ─────────────────────────────────────────────── */
+let _abonoId = null;
+function openAbonoModal(id) {
+  const idx = state.prestamos.findIndex(x=>x.id===id);
+  if (idx === -1) return;
+  const p = state.prestamos[idx];
+  _abonoId = id;
+  const dias = diasTranscurridos(p.fecha);
+  const total = p.monto + calcIntereses(dias);
+  document.getElementById('abonoSubtitle').textContent = 'Préstamo de '+p.nombre;
+  document.getElementById('abonoTotal').textContent = fmt(total);
+  document.getElementById('abonoAnterior').textContent = fmt(p.abonos||0);
+  document.getElementById('abonoInput').value = '';
+  document.getElementById('abonoModal').classList.remove('hidden');
+  setTimeout(()=>document.getElementById('abonoInput').focus(),50);
+}
+function closeAbonoModal(e) {
+  if (!e||e.target===document.getElementById('abonoModal')) document.getElementById('abonoModal').classList.add('hidden');
+}
+function guardarAbono() {
+  const idx = state.prestamos.findIndex(x=>x.id===_abonoId);
+  if (idx === -1) return;
+  const v = parseFloat(document.getElementById('abonoInput').value);
+  if (isNaN(v)||v<=0) { toast('⚠️ Ingresa un monto válido.','warn'); return; }
+  const dias = diasTranscurridos(state.prestamos[idx].fecha);
+  const total = state.prestamos[idx].monto + calcIntereses(dias);
+  const maxAbono = total - (state.prestamos[idx].abonos||0);
+  if (v > maxAbono) { toast('⚠️ El abono supera el saldo restante ('+fmt(maxAbono)+').','warn'); return; }
+  // mutate directly by index to guarantee persistence
+  state.prestamos[idx] = Object.assign({}, state.prestamos[idx], { abonos: (state.prestamos[idx].abonos||0) + v });
+  saveState();
+  document.getElementById('abonoModal').classList.add('hidden');
+  renderCards();
+  updateDashboard();
+  toast('✅ Abono de '+fmt(v)+' registrado.');
+}
+
+/* ── MARCAR PAGADO ──────────────────────────────────────── */
+let _pagadoId = null;
+function openPagadoModal(id) {
+  const p = state.prestamos.find(x=>x.id===id);
+  if (!p) return;
+  _pagadoId = id;
+  document.getElementById('pagadoMsg').textContent =
+    'Se eliminará el préstamo de ' + p.nombre + ' (' + fmt(p.monto) + ') y se liberará el capital. Esta acción no se puede deshacer.';
+  document.getElementById('pagadoModal').classList.remove('hidden');
+}
+function marcarPagado(id) {
+  const nombre = (state.prestamos.find(x=>x.id===id)||{}).nombre || '';
+  state.prestamos = state.prestamos.filter(x=>x.id!==id);
+  saveState();
+  renderCards();
+  updateDashboard();
+  document.getElementById('pagadoModal').classList.add('hidden');
+  toast('✅ Préstamo' + (nombre?' de '+nombre:'') + ' eliminado.');
+}
+
+/* ── NOTIFICACIÓN ───────────────────────────────────────── */
+function abrirNotif(id) {
+  const p = state.prestamos.find(x=>x.id===id);
+  if (!p) return;
+  const dias = diasTranscurridos(p.fecha);
+  const intereses = calcIntereses(dias);
+  const total = p.monto + intereses - (p.abonos||0);
+  const msg = `Hola ${p.nombre}, te saludo para recordarte sobre el préstamo registrado por ${fmt(p.monto)} el día ${fmtFecha(p.fecha)}. Actualmente llevas ${dias} día${dias!==1?'s':''} y el monto total acumulado con intereses es de ${fmt(total)}. Quedo atento a tu pago. ¡Muchas gracias!`;
+
+  document.getElementById('notifMsg').textContent = msg;
+  const telLimpio = p.tel.replace(/\D/g,'');
+  const waLink = 'https://wa.me/506'+telLimpio+'?text='+encodeURIComponent(msg);
+  const mailLink = 'mailto:'+p.email+'?subject='+encodeURIComponent('Recordatorio de Préstamo Pendiente')+'&body='+encodeURIComponent(msg);
+
+  document.getElementById('notifBtns').innerHTML = `
+    <a href="${waLink}" target="_blank" class="btn-action bg-[#25D366] text-white py-3 rounded-xl hover:opacity-90">
+      📲 Enviar por WhatsApp
+    </a>
+    <a href="${mailLink}" class="btn-action bg-slate-800 text-white py-3 rounded-xl hover:bg-slate-700">
+      ✉️ Enviar por Correo
+    </a>`;
+  document.getElementById('notifModal').classList.remove('hidden');
+}
+function closeNotifModal(e) {
+  if (!e||e.target===document.getElementById('notifModal')) document.getElementById('notifModal').classList.add('hidden');
+}
+
+/* ── FACTURA ────────────────────────────────────────────── */
+let _facturaId = null;
+function openFactura(id) {
+  const p = state.prestamos.find(x=>x.id===id);
+  if (!p) return;
+  _facturaId = id;
+  const dias = diasTranscurridos(p.fecha);
+  const intereses = calcIntereses(dias);
+  const abonos = p.abonos||0;
+  const totalBruto = p.monto + intereses;
+  const restante = Math.max(0, totalBruto - abonos);
+  const moroso = dias >= 4;
+
+  document.getElementById('fEmision').textContent = 'Emitido: '+new Date().toLocaleString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  document.getElementById('fNumComp').textContent = compNum();
+  document.getElementById('fCliente').textContent = p.nombre;
+  document.getElementById('fTelF').textContent = '+506 '+p.tel;
+  document.getElementById('fEmailF').textContent = p.email;
+  document.getElementById('fBase').textContent = fmt(p.monto);
+  document.getElementById('fDias').textContent = dias+' día'+(dias!==1?'s':'');
+  document.getElementById('fInter').textContent = fmt(intereses);
+  document.getElementById('fTotal').textContent = fmt(restante);
+  document.getElementById('fSinpeShow').textContent = state.sinpe || 'No configurado';
+
+  const abonoRow = document.getElementById('fAbonoRow');
+  if (abonos > 0) {
+    abonoRow.classList.remove('hidden');
+    document.getElementById('fAbonos').textContent = '- '+fmt(abonos);
+  } else {
+    abonoRow.classList.add('hidden');
+  }
+
+  const estadoEl = document.getElementById('fEstado');
+  if (restante <= 0) {
+    estadoEl.textContent = 'CANCELADO'; estadoEl.className = 'px-5 py-2 rounded-full text-xs font-bold tracking-wide bg-slate-100 text-slate-500';
+  } else if (moroso) {
+    estadoEl.textContent = 'EN MORA'; estadoEl.className = 'px-5 py-2 rounded-full text-xs font-bold tracking-wide bg-red-50 text-red-500 border border-red-200';
+  } else {
+    estadoEl.textContent = 'AL DÍA'; estadoEl.className = 'px-5 py-2 rounded-full text-xs font-bold tracking-wide bg-brand-light text-brand-xdark border border-brand/20';
+  }
+
+  document.getElementById('facturaModal').classList.remove('hidden');
+}
+function closeFacturaModal(e) {
+  if (!e||e.target===document.getElementById('facturaModal')) document.getElementById('facturaModal').classList.add('hidden');
+}
+
+/* ── DESCARGAR PNG ──────────────────────────────────────── */
+async function descargarPNG() {
+  const el = document.getElementById('ticketCapture');
+  toast('⏳ Generando imagen...');
+  try {
+    const canvas = await html2canvas(el, { scale:2, useCORS:true, backgroundColor:'#ffffff', logging:false });
+    const link = document.createElement('a');
+    const p = state.prestamos.find(x=>x.id===_facturaId);
+    link.download = 'comprobante-'+(p?p.nombre.replace(/\s/g,'-'):'prestamo')+'.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    toast('✅ Imagen descargada.');
+  } catch(err) {
+    console.error(err);
+    toast('❌ Error al generar la imagen.','error');
+  }
+}
+
+/* ── COMPARTIR WA ───────────────────────────────────────── */
+async function compartirWA() {
+  const p = state.prestamos.find(x=>x.id===_facturaId);
+  if (!p) return;
+  const el = document.getElementById('ticketCapture');
+  const dias = diasTranscurridos(p.fecha);
+  const intereses = calcIntereses(dias);
+  const restante = Math.max(0, p.monto + intereses - (p.abonos||0));
+
+  try {
+    toast('⏳ Preparando comprobante...');
+    const canvas = await html2canvas(el, { scale:2, useCORS:true, backgroundColor:'#ffffff', logging:false });
+    const blob = await new Promise(res => canvas.toBlob(res,'image/png'));
+    const file = new File([blob], 'comprobante-'+p.nombre.replace(/\s/g,'-')+'.png', { type:'image/png' });
+
+    const waMsg = `Hola ${p.nombre}, adjunto tu comprobante de préstamo actualizado. El saldo restante es ${fmt(restante)}. Quedo atento a tus comentarios.`;
+
+    if (navigator.canShare && navigator.canShare({ files:[file] })) {
+      await navigator.share({ files:[file], title:'Comprobante PrestaTodoCR', text: waMsg });
+      toast('✅ Compartido exitosamente.');
+    } else {
+      // fallback: descargar + abrir wa.me
+      const link = document.createElement('a');
+      link.download = file.name;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      const telLimpio = p.tel.replace(/\D/g,'');
+      setTimeout(()=>window.open('https://wa.me/506'+telLimpio+'?text='+encodeURIComponent(waMsg),'_blank'),600);
+      toast('✅ Imagen descargada · WhatsApp abierto.');
+    }
+  } catch(err) {
+    if (err.name!=='AbortError') {
+      console.error(err);
+      toast('❌ Error al compartir.','error');
+    }
+  }
+}
+
+/* ── CALCULADORA ────────────────────────────────────────── */
+function calcProyeccion() {
+  const monto = parseFloat(document.getElementById('calcMonto').value);
+  const result = document.getElementById('calcResult');
+  const rows = document.getElementById('calcRows');
+
+  if (isNaN(monto) || monto <= 0) { result.classList.add('hidden'); return; }
+  result.classList.remove('hidden');
+
+  const periodos = [
+    [1,3],[4,7],[8,11],[12,15],[16,19],[20,23],[24,27],[28,31],[32,35],[36,39]
+  ];
+
+  rows.innerHTML = periodos.map(([ini,fin],i) => {
+    const intereses = Math.floor(fin/4)*5000;
+    const total = monto + intereses;
+    const highlight = i===0?'bg-brand-light':i%2===0?'bg-slate-50/50':'bg-white';
+    return `
+    <div class="${highlight} px-5 py-3.5 grid grid-cols-3 items-center">
+      <div class="text-sm font-medium text-slate-700">
+        ${ini===fin?'Día '+ini:'Días '+ini+' – '+fin}
+      </div>
+      <div class="text-center mono text-sm font-semibold text-amber-500">
+        ${intereses>0?fmt(intereses):'₡0'}
+      </div>
+      <div class="text-right mono text-sm font-bold text-slate-900">
+        ${fmt(total)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ── TOAST ──────────────────────────────────────────────── */
+function toast(msg, type='success') {
+  const tc = document.getElementById('toastContainer');
+  const t  = document.createElement('div');
+  const bg = type==='warn'?'bg-amber-500':type==='error'?'bg-red-500':'bg-slate-900';
+  t.className = `toast ${bg} text-white text-sm font-medium px-4 py-3 rounded-xl shadow-lg pointer-events-auto max-w-xs`;
+  t.textContent = msg;
+  tc.appendChild(t);
+  setTimeout(()=>{ t.style.transition='opacity .3s'; t.style.opacity='0'; setTimeout(()=>t.remove(),320); },2800);
+}
+
+/* ── EVENT DELEGATION: card action buttons ──────────────── */
+// All card buttons use data-action + data-id to avoid onclick id interpolation bugs
+document.addEventListener('click', function(e) {
+  // walk up to find a card-action-btn (in case click landed on child svg/span)
+  let btn = e.target;
+  while (btn && !btn.classList.contains('card-action-btn')) {
+    btn = btn.parentElement;
+  }
+  if (!btn) return;
+  const action = btn.getAttribute('data-action');
+  const id     = btn.getAttribute('data-id');
+  if (!action || !id) return;
+  e.stopPropagation();
+  if (action === 'notif')   abrirNotif(id);
+  if (action === 'abono')   openAbonoModal(id);
+  if (action === 'factura') openFactura(id);
+  if (action === 'pagado')  openPagadoModal(id);
+});
+
+/* ── PAGADO MODAL LISTENERS ─────────────────────────────── */
+document.getElementById('pagadoCancelar').addEventListener('click', function() {
+  document.getElementById('pagadoModal').classList.add('hidden');
+  _pagadoId = null;
+});
+document.getElementById('pagadoConfirmar').addEventListener('click', function() {
+  if (_pagadoId) marcarPagado(_pagadoId);
+  _pagadoId = null;
+});
+// close on overlay click
+document.getElementById('pagadoModal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    this.classList.add('hidden');
+    _pagadoId = null;
+  }
+});
+
+/* ── INIT ───────────────────────────────────────────────── */
+loadState();
+setDefaultDate();
+updateDashboard();
+renderCards();
+updateClock();
+setInterval(()=>{ updateClock(); updateDashboard(); renderCards(); }, 60000);
+setInterval(updateClock, 1000);
+</script>
+</body>
+</html>
