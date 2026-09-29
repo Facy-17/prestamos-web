@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FinanceControl Cloud - Gestor Multidispositivo</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        emerald: { 400: '#34d399', 500: '#10b981', 600: '#059669' },
+                        cyan: { 400: '#22d3ee', 500: '#06b6d4' }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- FontAwesome Icons & Chart.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            background-color: #0b0f19;
+        }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 1rem); }
+        .glow-emerald { box-shadow: 0 0 20px rgba(16, 185, 129, 0.25); }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: #0b0f19; }
+        ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 4px; }
+    </style>
+</head>
+<body class="text-gray-100 min-h-screen flex flex-col justify-between selection:bg-emerald-500 selection:text-white">
+
+    <!-- AUTHENTICATION VIEW -->
+    <div id="auth-screen" class="fixed inset-0 z-50 bg-[#0b0f19] flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-gray-900/90 border border-gray-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-6">
+            <div class="text-center space-y-2">
+                <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-500 to-cyan-400 flex items-center justify-center text-gray-950 text-3xl font-black mx-auto shadow-lg shadow-emerald-500/20">
+                    <i class="fa-solid fa-cloud"></i>
+                </div>
+                <h1 class="text-2xl font-black tracking-tight text-white">FINANCE<span class="text-emerald-400">CONTROL</span> CLOUD</h1>
+                <p class="text-xs text-gray-400">Sincronización en tiempo real entre tu Celular y PC</p>
+            </div>
+
+            <div class="space-y-3">
+                <button id="quick-guest-btn" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-cyan-400 hover:from-emerald-400 hover:to-cyan-300 text-gray-950 font-black text-sm rounded-xl shadow-lg shadow-emerald-500/20 transition transform active:scale-95 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-bolt text-base"></i> Entrar / Iniciar Sincronización
+                </button>
+                <p class="text-[11px] text-gray-500 text-center">Accede al instante. Tus datos se guardarán de forma permanente en la nube asociados a tu sesión.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP SCREEN -->
+    <div id="app-screen" class="hidden min-h-screen flex flex-col">
+        <!-- HEADER -->
+        <header class="sticky top-0 z-30 bg-[#0b0f19]/80 backdrop-blur-xl border-b border-gray-800/80 px-4 py-3">
+            <div class="max-w-5xl mx-auto flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-cyan-400 flex items-center justify-center text-gray-950 font-black text-xl shadow-lg shadow-emerald-500/20">
+                        <i class="fa-solid fa-wallet"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-extrabold text-base tracking-wide text-white leading-tight">FINANCE<span class="text-emerald-400">CONTROL</span></h1>
+                        <div class="flex items-center gap-1.5 text-[11px]">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span class="text-emerald-400 font-bold" id="sync-status">Sincronizado</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <button id="currency-btn" class="px-2.5 py-1.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-xs font-semibold border border-gray-700/80 text-emerald-400 transition">
+                        <span id="currency-symbol">₡ (CRC)</span>
+                    </button>
+                    <button id="open-budget-btn" class="p-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-700/80 transition" title="Configurar Presupuesto">
+                        <i class="fa-solid fa-sliders"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-5xl mx-auto w-full px-4 py-5 flex-1 space-y-6">
+            <!-- Navigation Tabs -->
+            <div class="flex p-1 bg-gray-900/90 rounded-2xl border border-gray-800/80 max-w-md mx-auto shadow-inner">
+                <button id="tab-dashboard" class="flex-1 py-2.5 text-xs font-bold rounded-xl transition text-gray-950 bg-emerald-400 shadow-md">
+                    <i class="fa-solid fa-chart-pie mr-1"></i> Dashboard
+                </button>
+                <button id="tab-history" class="flex-1 py-2.5 text-xs font-bold rounded-xl transition text-gray-400 hover:text-white">
+                    <i class="fa-solid fa-list-check mr-1"></i> Historial
+                </button>
+                <button id="tab-shortcuts-guide" class="flex-1 py-2.5 text-xs font-bold rounded-xl transition text-gray-400 hover:text-white relative">
+                    <i class="fa-solid fa-bolt text-amber-400 mr-1"></i> Atajos Wallet
+                </button>
+            </div>
+
+            <!-- SECTION 1: DASHBOARD VIEW -->
+            <div id="view-dashboard" class="space-y-6">
+                <!-- Balance & Summary Cards Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Total Spent -->
+                    <div class="p-4 rounded-2xl bg-gray-900/60 border border-gray-800 backdrop-blur relative overflow-hidden">
+                        <div class="flex items-center justify-between text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">
+                            <span>Gastos del Mes</span>
+                            <i class="fa-solid fa-arrow-trend-down text-rose-400"></i>
+                        </div>
+                        <div class="text-2xl font-black text-white tracking-tight" id="dash-total-spent">₡0</div>
+                        <div class="mt-2 text-xs text-gray-400 flex items-center justify-between">
+                            <span>Transacciones:</span>
+                            <span id="dash-count" class="font-bold text-gray-200">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Wallet / Digital Payments -->
+                    <div class="p-4 rounded-2xl bg-gray-900/60 border border-gray-800 backdrop-blur">
+                        <div class="flex items-center justify-between text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">
+                            <span>Wallet / SINPE</span>
+                            <i class="fa-solid fa-wallet text-cyan-400"></i>
+                        </div>
+                        <div class="text-2xl font-black text-white tracking-tight" id="dash-wallet-spent">₡0</div>
+                        <div class="mt-2 text-xs text-gray-400 flex items-center justify-between">
+                            <span>Porcentaje:</span>
+                            <span id="dash-wallet-pct" class="font-bold text-cyan-400">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Cards (1 & 2) -->
+                    <div class="p-4 rounded-2xl bg-gray-900/60 border border-gray-800 backdrop-blur">
+                        <div class="flex items-center justify-between text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">
+                            <span>Tarjetas (1 y 2)</span>
+                            <i class="fa-solid fa-credit-card text-indigo-400"></i>
+                        </div>
+                        <div class="text-2xl font-black text-white tracking-tight" id="dash-card-spent">₡0</div>
+                        <div class="mt-2 text-xs text-gray-400 flex items-center justify-between">
+                            <span>Porcentaje:</span>
+                            <span id="dash-card-pct" class="font-bold text-indigo-400">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Remaining Budget -->
+                    <div class="p-4 rounded-2xl bg-gray-900/60 border border-gray-800 backdrop-blur">
+                        <div class="flex items-center justify-between text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">
+                            <span>Disponible</span>
+                            <i class="fa-solid fa-piggy-bank text-emerald-400"></i>
+                        </div>
+                        <div class="text-2xl font-black text-white tracking-tight" id="dash-budget-remaining">₡0</div>
+                        <div class="mt-2 w-full bg-gray-800 h-2 rounded-full overflow-hidden">
+                            <div id="budget-progress-bar" class="bg-emerald-400 h-full w-0 transition-all duration-500"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics Charts -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="p-5 rounded-2xl bg-gray-900/60 border border-gray-800 flex flex-col items-center">
+                        <h3 class="text-xs font-bold text-gray-300 uppercase tracking-wider mb-4 w-full text-left flex items-center gap-2">
+                            <i class="fa-solid fa-chart-pie text-emerald-400"></i> Gastos por Categoría
+                        </h3>
+                        <div class="w-full max-w-[280px] h-[240px] relative flex items-center justify-center">
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-gray-900/60 border border-gray-800 flex flex-col">
+                        <h3 class="text-xs font-bold text-gray-300 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-column text-cyan-400"></i> Desglose por Medio de Pago
+                        </h3>
+                        <div class="w-full h-[240px] relative">
+                            <canvas id="methodChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Expenses List -->
+                <div class="p-5 rounded-2xl bg-gray-900/60 border border-gray-800">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left text-amber-400"></i> Transacciones Recientes (Nube)
+                        </h3>
+                        <button id="nav-to-history" class="text-xs text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1">
+                            Ver Todo <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                        </button>
+                    </div>
+                    <div id="recent-list" class="space-y-2.5"></div>
+                </div>
+            </div>
+
+            <!-- SECTION 2: HISTORY VIEW -->
+            <div id="view-history" class="hidden space-y-6">
+                <div class="p-4 rounded-2xl bg-gray-900/60 border border-gray-800 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1 font-medium">Categoría</label>
+                        <select id="filter-category" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-gray-200 focus:ring-2 focus:ring-emerald-500 outline-none">
+                            <option value="ALL">Todas las Categorías</option>
+                            <option value="Alimentación">🍔 Alimentación</option>
+                            <option value="Transporte">🚗 Transporte</option>
+                            <option value="Entretenimiento">🎉 Entretenimiento</option>
+                            <option value="Servicios">💡 Servicios</option>
+                            <option value="Otros">📦 Otros</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1 font-medium">Medio de Pago</label>
+                        <select id="filter-method" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-gray-200 focus:ring-2 focus:ring-emerald-500 outline-none">
+                            <option value="ALL">Todos los Medios</option>
+                            <option value="Wallet / Billetera Digital">Wallet / Digital</option>
+                            <option value="Tarjeta 1">Tarjeta 1</option>
+                            <option value="Tarjeta 2">Tarjeta 2</option>
+                            <option value="SINPE / Transferencia">SINPE / Transferencia</option>
+                            <option value="Efectivo">Efectivo</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-400 mb-1 font-medium">Buscar Descripción</label>
+                        <input type="text" id="filter-search" placeholder="Ej: Supermercado..." class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-gray-200 focus:ring-2 focus:ring-emerald-500 outline-none">
+                    </div>
+                </div>
+
+                <div class="p-5 rounded-2xl bg-gray-900/60 border border-gray-800">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xs font-bold text-gray-300 uppercase tracking-wider">Historial Sincronizado (<span id="filtered-count">0</span>)</h3>
+                    </div>
+                    <div id="full-history-list" class="space-y-2.5"></div>
+                </div>
+            </div>
+
+            <!-- SECTION 3: SHORTCUTS GUIDE -->
+            <div id="view-shortcuts-guide" class="hidden space-y-6">
+                <div class="p-5 rounded-2xl bg-gray-900/60 border border-gray-800 space-y-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-2xl bg-amber-400/10 text-amber-400 flex items-center justify-center text-2xl border border-amber-400/20">
+                            <i class="fa-solid fa-bolt"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-bold text-white">Atajo Automático al Pagar</h2>
+                            <p class="text-xs text-gray-400">Abre el formulario desde tu tarjeta o Wallet en el celular</p>
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-xl bg-gray-950 border border-gray-800 space-y-3">
+                        <div class="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+                            <i class="fa-brands fa-apple text-base"></i> iPhone / Android
+                        </div>
+                        <p class="text-xs text-gray-300 leading-relaxed">
+                            Añade esta Web App a la pantalla de inicio de tu celular. Al usar la URL con el parámetro <code class="text-emerald-400 font-mono bg-gray-900 px-1.5 py-0.5 rounded">?action=add</code>, el formulario de registro de gasto se abrirá instantáneamente.
+                        </p>
+                    </div>
+
+                    <div class="p-4 rounded-xl bg-gray-950/80 border border-emerald-500/30 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div>
+                            <div class="text-xs font-bold text-white">URL para Atajo Exprès:</div>
+                            <div class="text-[11px] text-gray-400 font-mono break-all" id="shortcut-url-text">...</div>
+                        </div>
+                        <button id="copy-shortcut-btn" class="w-full sm:w-auto px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 shrink-0">
+                            <i class="fa-solid fa-copy"></i> Copiar URL
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Floating Quick Add Button (FAB) -->
+        <div class="fixed bottom-6 right-6 z-40 pb-safe">
+            <button id="fab-add" class="w-14 h-14 rounded-full bg-gradient-to-tr from-emerald-500 to-cyan-400 text-gray-950 font-black shadow-xl shadow-emerald-500/30 flex items-center justify-center text-2xl transition transform hover:scale-105 active:scale-95 border border-emerald-300/40 glow-emerald">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- QUICK EXPENSE ENTRY MODAL -->
+    <div id="expense-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div id="expense-modal-card" class="bg-[#0e1422] border border-gray-800 w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl transform translate-y-full sm:translate-y-0 transition-transform duration-300">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-gray-800/80">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                        <i class="fa-solid fa-bolt text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-extrabold text-white text-base leading-tight">Registro Exprès (Nube)</h3>
+                        <p class="text-[11px] text-gray-400">Se guardará automáticamente en todos tus dispositivos</p>
+                    </div>
+                </div>
+                <button id="close-expense-modal" class="w-8 h-8 text-gray-400 hover:text-white rounded-xl bg-gray-900 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="expense-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-300 mb-1 uppercase tracking-wider">Monto Gastado</label>
+                    <div class="relative">
+                        <span id="input-currency-symbol" class="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-400 font-black text-xl">₡</span>
+                        <input type="number" step="any" id="exp-amount" required placeholder="0.00" inputmode="decimal" class="w-full bg-gray-950 border border-gray-800 rounded-2xl pl-10 pr-4 py-3 text-2xl font-black text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-300 mb-1.5 uppercase tracking-wider">Medio de Pago</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" data-method="Wallet / Billetera Digital" class="payment-method-btn py-2.5 px-3 rounded-xl border border-gray-800 bg-gray-950 text-xs font-bold text-gray-300 flex items-center justify-center gap-2 transition">
+                            <i class="fa-solid fa-wallet text-cyan-400"></i> Wallet / Digital
+                        </button>
+                        <button type="button" data-method="Tarjeta 1" class="payment-method-btn py-2.5 px-3 rounded-xl border border-gray-800 bg-gray-950 text-xs font-bold text-gray-300 flex items-center justify-center gap-2 transition">
+                            <i class="fa-solid fa-credit-card text-indigo-400"></i> Tarjeta 1
+                        </button>
+                        <button type="button" data-method="Tarjeta 2" class="payment-method-btn py-2.5 px-3 rounded-xl border border-gray-800 bg-gray-950 text-xs font-bold text-gray-300 flex items-center justify-center gap-2 transition">
+                            <i class="fa-solid fa-credit-card text-purple-400"></i> Tarjeta 2
+                        </button>
+                        <button type="button" data-method="SINPE / Transferencia" class="payment-method-btn py-2.5 px-3 rounded-xl border border-gray-800 bg-gray-950 text-xs font-bold text-gray-300 flex items-center justify-center gap-2 transition">
+                            <i class="fa-solid fa-mobile-screen-button text-amber-400"></i> SINPE
+                        </button>
+                    </div>
+                    <input type="hidden" id="exp-method" required value="Wallet / Billetera Digital">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-300 mb-1 uppercase tracking-wider">Categoría</label>
+                    <select id="exp-category" required class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2.5 text-sm font-semibold text-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                        <option value="Alimentación">🍔 Alimentación</option>
+                        <option value="Transporte">🚗 Transporte</option>
+                        <option value="Entretenimiento">🎉 Entretenimiento</option>
+                        <option value="Servicios">💡 Servicios</option>
+                        <option value="Otros" selected>📦 Otros</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-300 mb-1 uppercase tracking-wider">Descripción del Gasto</label>
+                    <input type="text" id="exp-description" required placeholder="Ej: Supermercado, farmacia, etc." class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm font-medium text-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-300 mb-1 uppercase tracking-wider">Fecha</label>
+                    <input type="date" id="exp-date" required class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                </div>
+
+                <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-cyan-400 hover:from-emerald-400 hover:to-cyan-300 text-gray-950 font-black text-sm rounded-xl shadow-lg shadow-emerald-500/20 transition transform active:scale-95 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-cloud-arrow-up text-base"></i> Guardar en la Nube
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- BUDGET MODAL -->
+    <div id="budget-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-[#0e1422] border border-gray-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-gray-800">
+                <h3 class="font-bold text-white text-sm">Presupuesto Mensual</h3>
+                <button id="close-budget-modal" class="text-gray-400 hover:text-white">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs text-gray-400 mb-1">Monto Máximo Mensual</label>
+                    <input type="number" id="budget-input-amount" placeholder="0" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-white font-bold text-lg outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+                <button id="save-budget-btn" class="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-xl transition">
+                    Guardar Presupuesto
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-5 right-5 z-50 bg-emerald-500 text-gray-950 px-4 py-3 rounded-2xl shadow-xl font-bold text-xs flex items-center gap-2 transform translate-y-[-100px] opacity-0 transition-all duration-300 border border-emerald-300/40">
+        <i class="fa-solid fa-circle-check text-base"></i> <span id="toast-message">Guardado con éxito</span>
+    </div>
+
+    <!-- FIREBASE MODULES & LOGIC -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global environment variables provided by environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-finance-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "demo-api-key",
+            authDomain: "demo.firebaseapp.com",
+            projectId: "demo-project",
+            storageBucket: "demo.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:demo"
+        };
+
+        let app = null;
+        let auth = null;
+        let db = null;
+        let useLocalStorageOnly = false;
+
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (err) {
+            console.warn("Firebase initialization failed, falling back to local storage:", err);
+            useLocalStorageOnly = true;
+        }
+
+        let currentUser = null;
+        let expenses = [];
+        let monthlyBudget = parseFloat(localStorage.getItem('fc_budget')) || 300000;
+        let currentCurrency = localStorage.getItem('fc_currency') || 'CRC';
+        let categoryChartInstance = null;
+        let methodChartInstance = null;
+
+        function loadFromLocalStorage() {
+            try {
+                const stored = localStorage.getItem('fc_expenses');
+                expenses = stored ? JSON.parse(stored) : [];
+                expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+            } catch (e) {
+                expenses = [];
+            }
+            renderDashboard();
+            if (!document.getElementById('view-history').classList.contains('hidden')) {
+                renderHistory();
+            }
+        }
+
+        function saveAllToLocalStorage() {
+            try {
+                localStorage.setItem('fc_expenses', JSON.stringify(expenses));
+                localStorage.setItem('fc_budget', monthlyBudget.toString());
+                localStorage.setItem('fc_currency', currentCurrency);
+            } catch (e) {
+                console.error("Local storage save error:", e);
+            }
+        }
+
+        function setSyncStatusUI(status, type = 'emerald') {
+            const statusEl = document.getElementById('sync-status');
+            if (!statusEl) return;
+            
+            const dotEl = statusEl.previousElementSibling;
+            statusEl.innerText = status;
+            
+            if (type === 'emerald') {
+                statusEl.className = "text-emerald-400 font-bold";
+                if (dotEl) dotEl.className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+            } else if (type === 'amber') {
+                statusEl.className = "text-amber-400 font-bold";
+                if (dotEl) dotEl.className = "w-2 h-2 rounded-full bg-amber-400";
+            } else {
+                statusEl.className = "text-rose-400 font-bold";
+                if (dotEl) dotEl.className = "w-2 h-2 rounded-full bg-rose-400";
+            }
+        }
+
+        // AUTHENTICATION INIT
+        window.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('exp-date').value = new Date().toISOString().split('T')[0];
+            selectPaymentMethod('Wallet / Billetera Digital');
+            setupShortcutURL();
+            updateCurrencyUI();
+
+            if (useLocalStorageOnly || !auth) {
+                enableLocalStorageMode("Modo Local (Seguro)");
+                return;
+            }
+
+            // Handle Authentication with catch
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    try {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } catch (e) {
+                        await signInAnonymously(auth);
+                    }
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (authErr) {
+                console.warn("Auth error, switching to local mode:", authErr);
+                enableLocalStorageMode("Modo Local (Seguro)");
+                return;
+            }
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    currentUser = user;
+                    document.getElementById('auth-screen').classList.add('hidden');
+                    document.getElementById('app-screen').classList.remove('hidden');
+                    
+                    // Start Firestore Realtime Listener
+                    initRealtimeSync();
+                } else {
+                    enableLocalStorageMode("Modo Local (Seguro)");
+                }
+            });
+
+            // Auto-open modal if launched via shortcut parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('action') === 'add') {
+                setTimeout(() => openExpenseModal(), 300);
+            }
+        });
+
+        function enableLocalStorageMode(statusText) {
+            useLocalStorageOnly = true;
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('app-screen').classList.remove('hidden');
+            setSyncStatusUI(statusText, 'amber');
+            loadFromLocalStorage();
+        }
+
+        function initRealtimeSync() {
+            if (!currentUser || useLocalStorageOnly || !db) {
+                enableLocalStorageMode("Modo Local (Seguro)");
+                return;
+            }
+
+            try {
+                const expensesCollection = collection(db, 'artifacts', appId, 'public', 'data', 'expenses');
+
+                onSnapshot(expensesCollection, (snapshot) => {
+                    expenses = [];
+                    snapshot.forEach((doc) => {
+                        expenses.push({ id: doc.id, ...doc.data() });
+                    });
+
+                    expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+                    saveAllToLocalStorage(); // Backup cloud data to local storage
+
+                    setSyncStatusUI('Sincronizado', 'emerald');
+                    renderDashboard();
+                    if (!document.getElementById('view-history').classList.contains('hidden')) {
+                        renderHistory();
+                    }
+                }, (error) => {
+                    console.warn("Firestore sync permission error, falling back gracefully to Local Storage:", error.message);
+                    enableLocalStorageMode("Guardado Local (Sin Nube)");
+                });
+            } catch (err) {
+                console.warn("Firestore listener setup failed:", err);
+                enableLocalStorageMode("Guardado Local");
+            }
+        }
+
+        async function saveExpenseToFirestore(expenseData) {
+            // Always save to memory and local storage first for immediate UI responsiveness
+            const existingIdx = expenses.findIndex(e => e.id === expenseData.id);
+            if (existingIdx >= 0) {
+                expenses[existingIdx] = expenseData;
+            } else {
+                expenses.unshift(expenseData);
+            }
+            saveAllToLocalStorage();
+            renderDashboard();
+
+            if (useLocalStorageOnly || !currentUser || !db) {
+                setSyncStatusUI('Guardado en Local', 'amber');
+                return;
+            }
+
+            try {
+                setSyncStatusUI('Guardando...', 'emerald');
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'expenses', expenseData.id);
+                await setDoc(docRef, expenseData);
+                setSyncStatusUI('Sincronizado', 'emerald');
+            } catch (err) {
+                console.warn("Could not save to Firestore (permission/network issue), saved locally:", err.message);
+                useLocalStorageOnly = true;
+                setSyncStatusUI('Guardado Localmente', 'amber');
+            }
+        }
+
+        async function deleteExpenseFromFirestore(id) {
+            // Remove locally first
+            expenses = expenses.filter(e => e.id !== id);
+            saveAllToLocalStorage();
+            renderDashboard();
+            if (!document.getElementById('view-history').classList.contains('hidden')) {
+                renderHistory();
+            }
+
+            if (useLocalStorageOnly || !currentUser || !db) {
+                setSyncStatusUI('Guardado en Local', 'amber');
+                return;
+            }
+
+            try {
+                setSyncStatusUI('Eliminando...', 'emerald');
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'expenses', id);
+                await deleteDoc(docRef);
+                setSyncStatusUI('Sincronizado', 'emerald');
+            } catch (err) {
+                console.warn("Could not delete from Firestore, removed locally:", err.message);
+                useLocalStorageOnly = true;
+                setSyncStatusUI('Modo Local', 'amber');
+            }
+        }
+
+        // DOM EVENT LISTENERS
+        document.getElementById('quick-guest-btn').addEventListener('click', async () => {
+            if (auth && !auth.currentUser) {
+                try {
+                    await signInAnonymously(auth);
+                } catch (e) {
+                    enableLocalStorageMode("Modo Local (Seguro)");
+                }
+            } else {
+                enableLocalStorageMode("Modo Local (Seguro)");
+            }
+        });
+
+        document.getElementById('tab-dashboard').addEventListener('click', () => switchTab('dashboard'));
+        document.getElementById('tab-history').addEventListener('click', () => switchTab('history'));
+        document.getElementById('tab-shortcuts-guide').addEventListener('click', () => switchTab('shortcuts-guide'));
+        document.getElementById('nav-to-history').addEventListener('click', () => switchTab('history'));
+
+        document.getElementById('currency-btn').addEventListener('click', toggleCurrency);
+        document.getElementById('open-budget-btn').addEventListener('click', openBudgetModal);
+        document.getElementById('close-budget-modal').addEventListener('click', closeBudgetModal);
+        document.getElementById('save-budget-btn').addEventListener('click', saveBudget);
+
+        document.getElementById('fab-add').addEventListener('click', openExpenseModal);
+        document.getElementById('close-expense-modal').addEventListener('click', closeExpenseModal);
+        document.getElementById('expense-form').addEventListener('submit', handleSaveExpense);
+
+        document.querySelectorAll('.payment-method-btn').forEach(btn => {
+            btn.addEventListener('click', () => selectPaymentMethod(btn.dataset.method));
+        });
+
+        document.getElementById('filter-category').addEventListener('change', renderHistory);
+        document.getElementById('filter-method').addEventListener('change', renderHistory);
+        document.getElementById('filter-search').addEventListener('input', renderHistory);
+
+        document.getElementById('copy-shortcut-btn').addEventListener('click', copyShortcutURL);
+
+        function switchTab(tab) {
+            document.getElementById('view-dashboard').classList.add('hidden');
+            document.getElementById('view-history').classList.add('hidden');
+            document.getElementById('view-shortcuts-guide').classList.add('hidden');
+
+            document.getElementById('tab-dashboard').className = "flex-1 py-2.5 text-xs font-bold rounded-xl transition text-gray-400 hover:text-white";
+            document.getElementById('tab-history').className = "flex-1 py-2.5 text-xs font-bold rounded-xl transition text-gray-400 hover:text-white";
+            document.getElementById('tab-shortcuts-guide').className = "flex-1 py-2.5 text-xs font-bold rounded-xl transition text-gray-400 hover:text-white";
+
+            if (tab === 'dashboard') {
+                document.getElementById('view-dashboard').classList.remove('hidden');
+                document.getElementById('tab-dashboard').className = "flex-1 py-2.5 text-xs font-bold rounded-xl transition text-gray-950 bg-emerald-400 shadow-md";
+                renderDashboard();
+            } else if (tab === 'history') {
+                document.getElementById('view-history').classList.remove('hidden');
+                document.getElementById('tab-history').className = "flex-1 py-2.5 text-xs font-bold rounded-xl transition text-gray-950 bg-emerald-400 shadow-md";
+                renderHistory();
+            } else if (tab === 'shortcuts-guide') {
+                document.getElementById('view-shortcuts-guide').classList.remove('hidden');
+                document.getElementById('tab-shortcuts-guide').className = "flex-1 py-2.5 text-xs font-bold rounded-xl transition text-gray-950 bg-emerald-400 shadow-md";
+            }
+        }
+
+        function toggleCurrency() {
+            currentCurrency = currentCurrency === 'CRC' ? 'USD' : 'CRC';
+            saveAllToLocalStorage();
+            updateCurrencyUI();
+            renderDashboard();
+            if (!document.getElementById('view-history').classList.contains('hidden')) {
+                renderHistory();
+            }
+        }
+
+        function updateCurrencyUI() {
+            const symbol = currentCurrency === 'CRC' ? '₡' : '$';
+            document.getElementById('currency-symbol').innerText = `${symbol} (${currentCurrency})`;
+            document.getElementById('input-currency-symbol').innerText = symbol;
+        }
+
+        function formatMoney(amount) {
+            const symbol = currentCurrency === 'CRC' ? '₡' : '$';
+            return symbol + Number(amount).toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        }
+
+        function selectPaymentMethod(method) {
+            document.getElementById('exp-method').value = method;
+            document.querySelectorAll('.payment-method-btn').forEach(btn => {
+                btn.classList.remove('border-emerald-500', 'bg-emerald-500/20', 'text-white', 'ring-2', 'ring-emerald-500');
+                btn.classList.add('border-gray-800', 'bg-gray-950', 'text-gray-300');
+            });
+
+            const selectedBtn = document.querySelector(`.payment-method-btn[data-method="${method}"]`);
+            if (selectedBtn) {
+                selectedBtn.classList.remove('border-gray-800', 'bg-gray-950', 'text-gray-300');
+                selectedBtn.classList.add('border-emerald-500', 'bg-emerald-500/20', 'text-white', 'ring-2', 'ring-emerald-500');
+            }
+        }
+
+        async function handleSaveExpense(event) {
+            event.preventDefault();
+
+            const amount = parseFloat(document.getElementById('exp-amount').value);
+            const method = document.getElementById('exp-method').value;
+            const category = document.getElementById('exp-category').value;
+            const description = document.getElementById('exp-description').value.trim();
+            const date = document.getElementById('exp-date').value;
+
+            if (!amount || amount <= 0) return;
+
+            const newExpense = {
+                id: Date.now().toString(),
+                amount,
+                method,
+                category,
+                description,
+                date,
+                userId: currentUser ? currentUser.uid : 'anon'
+            };
+
+            closeExpenseModal();
+            await saveExpenseToFirestore(newExpense);
+            showToast(`Gasto de ${formatMoney(amount)} registrado`);
+        }
+
+        function openExpenseModal() {
+            const modal = document.getElementById('expense-modal');
+            const card = document.getElementById('expense-modal-card');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                card.classList.remove('translate-y-full');
+            }, 10);
+            document.getElementById('exp-amount').focus();
+        }
+
+        function closeExpenseModal() {
+            const modal = document.getElementById('expense-modal');
+            const card = document.getElementById('expense-modal-card');
+            card.classList.add('translate-y-full');
+            modal.classList.add('opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.getElementById('expense-form').reset();
+                document.getElementById('exp-date').value = new Date().toISOString().split('T')[0];
+                selectPaymentMethod('Wallet / Billetera Digital');
+            }, 300);
+        }
+
+        function openBudgetModal() {
+            document.getElementById('budget-input-amount').value = monthlyBudget;
+            const modal = document.getElementById('budget-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.classList.remove('opacity-0'), 10);
+        }
+
+        function closeBudgetModal() {
+            const modal = document.getElementById('budget-modal');
+            modal.classList.add('opacity-0');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+
+        function saveBudget() {
+            const val = parseFloat(document.getElementById('budget-input-amount').value);
+            if (!isNaN(val) && val >= 0) {
+                monthlyBudget = val;
+                saveAllToLocalStorage();
+                closeBudgetModal();
+                renderDashboard();
+                showToast('Presupuesto actualizado');
+            }
+        }
+
+        function renderDashboard() {
+            const now = new Date();
+            const currentMonthExpenses = expenses.filter(exp => {
+                const expDate = new Date(exp.date);
+                return expDate.getMonth() === now.getMonth() && expDate.getFullYear() === now.getFullYear();
+            });
+
+            const totalSpent = currentMonthExpenses.reduce((sum, item) => sum + item.amount, 0);
+            const walletSpent = currentMonthExpenses
+                .filter(i => i.method === 'Wallet / Billetera Digital' || i.method === 'SINPE / Transferencia')
+                .reduce((sum, i) => sum + i.amount, 0);
+
+            const cardSpent = currentMonthExpenses
+                .filter(i => i.method === 'Tarjeta 1' || i.method === 'Tarjeta 2')
+                .reduce((sum, i) => sum + i.amount, 0);
+
+            document.getElementById('dash-total-spent').innerText = formatMoney(totalSpent);
+            document.getElementById('dash-count').innerText = currentMonthExpenses.length;
+            
+            document.getElementById('dash-wallet-spent').innerText = formatMoney(walletSpent);
+            const walletPct = totalSpent > 0 ? Math.round((walletSpent / totalSpent) * 100) : 0;
+            document.getElementById('dash-wallet-pct').innerText = `${walletPct}%`;
+
+            document.getElementById('dash-card-spent').innerText = formatMoney(cardSpent);
+            const cardPct = totalSpent > 0 ? Math.round((cardSpent / totalSpent) * 100) : 0;
+            document.getElementById('dash-card-pct').innerText = `${cardPct}%`;
+
+            const remainingBudget = monthlyBudget - totalSpent;
+            document.getElementById('dash-budget-remaining').innerText = formatMoney(remainingBudget);
+
+            const budgetPct = Math.min(Math.round((totalSpent / monthlyBudget) * 100), 100);
+            const progressBar = document.getElementById('budget-progress-bar');
+            if (progressBar) progressBar.style.width = `${budgetPct}%`;
+
+            renderRecentList(expenses.slice(0, 5));
+            updateCharts(currentMonthExpenses);
+        }
+
+        function renderRecentList(items) {
+            const container = document.getElementById('recent-list');
+            if (items.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-500 text-center py-6">Sin datos registrados</p>`;
+                return;
+            }
+
+            container.innerHTML = items.map(item => `
+                <div class="flex items-center justify-between p-3.5 rounded-2xl bg-gray-950 border border-gray-800/80 hover:border-gray-700 transition">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-gray-900 border border-gray-800 flex items-center justify-center text-gray-300 shrink-0">
+                            ${getCategoryIcon(item.category)}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-sm font-bold text-white truncate">${escapeHtml(item.description)}</div>
+                            <div class="text-xs text-gray-400 flex items-center gap-2 mt-0.5">
+                                <span class="px-1.5 py-0.5 rounded-md bg-gray-900 border border-gray-800 text-[10px] font-semibold text-emerald-400">${item.method}</span>
+                                <span class="text-[11px] text-gray-500">${item.date}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-right shrink-0 flex items-center gap-3">
+                        <div class="text-sm font-black text-white">-${formatMoney(item.amount)}</div>
+                        <button data-id="${item.id}" class="delete-btn text-xs text-gray-500 hover:text-rose-400 transition">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            container.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', () => deleteExpenseFromFirestore(btn.dataset.id));
+            });
+        }
+
+        function renderHistory() {
+            const categoryFilter = document.getElementById('filter-category').value;
+            const methodFilter = document.getElementById('filter-method').value;
+            const searchFilter = document.getElementById('filter-search').value.toLowerCase();
+
+            const filtered = expenses.filter(item => {
+                const matchesCategory = categoryFilter === 'ALL' || item.category === categoryFilter;
+                const matchesMethod = methodFilter === 'ALL' || item.method === methodFilter;
+                const matchesSearch = item.description.toLowerCase().includes(searchFilter);
+                return matchesCategory && matchesMethod && matchesSearch;
+            });
+
+            document.getElementById('filtered-count').innerText = filtered.length;
+            const container = document.getElementById('full-history-list');
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<p class="text-xs text-gray-500 text-center py-6">No se encontraron transacciones</p>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(item => `
+                <div class="flex items-center justify-between p-3.5 rounded-2xl bg-gray-950 border border-gray-800/80 hover:border-gray-700 transition">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-gray-900 border border-gray-800 flex items-center justify-center text-gray-300 shrink-0">
+                            ${getCategoryIcon(item.category)}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-sm font-bold text-white truncate">${escapeHtml(item.description)}</div>
+                            <div class="text-xs text-gray-400 flex flex-wrap items-center gap-1.5 mt-0.5">
+                                <span class="px-1.5 py-0.5 rounded-md bg-gray-900 border border-gray-800 text-[10px] font-semibold text-gray-300">${item.category}</span>
+                                <span class="px-1.5 py-0.5 rounded-md bg-gray-900 border border-gray-800 text-[10px] font-semibold text-emerald-400">${item.method}</span>
+                                <span class="text-[11px] text-gray-500">${item.date}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 shrink-0">
+                        <div class="text-sm font-black text-white">-${formatMoney(item.amount)}</div>
+                        <button data-id="${item.id}" class="delete-btn p-2 text-gray-500 hover:text-rose-400 rounded-lg transition">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            container.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', () => deleteExpenseFromFirestore(btn.dataset.id));
+            });
+        }
+
+        function updateCharts(monthData) {
+            const categories = ['Alimentación', 'Transporte', 'Entretenimiento', 'Servicios', 'Otros'];
+            const catTotals = categories.map(cat => 
+                monthData.filter(i => i.category === cat).reduce((s, i) => s + i.amount, 0)
+            );
+
+            if (!categoryChartInstance) {
+                const ctxCat = document.getElementById('categoryChart').getContext('2d');
+                categoryChartInstance = new Chart(ctxCat, {
+                    type: 'doughnut',
+                    data: {
+                        labels: categories,
+                        datasets: [{ data: catTotals, backgroundColor: ['#10b981', '#00f0ff', '#818cf8', '#fbbf24', '#f43f5e'], borderWidth: 0 }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 10, weight: 'bold' } } } }, cutout: '72%' }
+                });
+            } else {
+                categoryChartInstance.data.datasets[0].data = catTotals;
+                categoryChartInstance.update();
+            }
+
+            const methods = ['Wallet / Billetera Digital', 'Tarjeta 1', 'Tarjeta 2', 'SINPE / Transferencia', 'Efectivo'];
+            const methodTotals = methods.map(m => 
+                monthData.filter(i => i.method === m).reduce((s, i) => s + i.amount, 0)
+            );
+
+            if (!methodChartInstance) {
+                const ctxMethod = document.getElementById('methodChart').getContext('2d');
+                methodChartInstance = new Chart(ctxMethod, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Wallet', 'Tarjeta 1', 'Tarjeta 2', 'SINPE', 'Efectivo'],
+                        datasets: [{ label: 'Monto Gastado', data: methodTotals, backgroundColor: ['#00f0ff', '#818cf8', '#c084fc', '#f59e0b', '#10b981'], borderRadius: 10 }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 10 } } }, y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af', font: { size: 10 } } } } }
+                });
+            } else {
+                methodChartInstance.data.datasets[0].data = methodTotals;
+                methodChartInstance.update();
+            }
+        }
+
+        function setupShortcutURL() {
+            const currentUrl = window.location.href.split('?')[0];
+            document.getElementById('shortcut-url-text').innerText = `${currentUrl}?action=add`;
+        }
+
+        function copyShortcutURL() {
+            const url = document.getElementById('shortcut-url-text').innerText;
+            const tempInput = document.createElement('input');
+            tempInput.value = url;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            showToast('URL copiada al portapapeles');
+        }
+
+        function getCategoryIcon(category) {
+            switch(category) {
+                case 'Alimentación': return '<i class="fa-solid fa-utensils text-emerald-400"></i>';
+                case 'Transporte': return '<i class="fa-solid fa-car text-cyan-400"></i>';
+                case 'Entretenimiento': return '<i class="fa-solid fa-gamepad text-purple-400"></i>';
+                case 'Servicios': return '<i class="fa-solid fa-lightbulb text-amber-400"></i>';
+                default: return '<i class="fa-solid fa-box text-gray-400"></i>';
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').innerText = message;
+            toast.classList.remove('translate-y-[-100px]', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-[-100px]', 'opacity-0');
+            }, 3000);
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
